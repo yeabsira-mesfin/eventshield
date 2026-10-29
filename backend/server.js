@@ -5,10 +5,11 @@ import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { pool, query } from './db.js';
 import { manage, staff, canReadRegistration, validEvent, csvCell } from './policy.js';
+import { installExtensions, validateRegistrationRules, persistRegistrationAnswers } from './extensions.js';
 
 export const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '128kb' }));
+app.use(express.json({ limit: '256kb' }));
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   res.set('X-Content-Type-Options', 'nosniff');
@@ -40,7 +41,21 @@ const allow = fn => (req,res,next) => {
   void security(req.user.id,'unauthorized_access','high','API',req.path).catch(() => {});
   return res.status(403).json({ error: 'Access denied' });
 };
-const loginLimiter = rateLimit({ windowMs: 15*60*1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false });
+const loginLimiter = rateLimit({
+  windowMs: 15*60*1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false,
+  handler: (req,res) => {
+    void security(null,'authentication_rate_limit','high','authentication','Login rate limit triggered').catch(() => {});
+    res.status(429).json({ error:'Too many login attempts' });
+  }
+});
+const apiLimiter = rateLimit({
+  windowMs: 15*60*1000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false,
+  handler: (req,res) => {
+    void security(null,'api_rate_limit','high','gateway','API rate limit triggered').catch(() => {});
+    res.status(429).json({ error:'API rate limit exceeded' });
+  }
+});
+app.use('/api',apiLimiter);
 app.get('/api/health', (_req,res) => res.json({ status: 'ok', service: 'eventshield' }));
 app.post('/api/auth/login', loginLimiter, asyncRoute(async (req,res) => {
   const { email, password } = req.body ?? {};
@@ -50,6 +65,10 @@ app.post('/api/auth/login', loginLimiter, asyncRoute(async (req,res) => {
   const user = rows[0];
   if (!user || !(await bcrypt.compare(password,user.password_hash))) {
     await security(user?.id,'login_failure','medium','authentication','Unsuccessful login');
+    if (user) {
+      const r = await query("SELECT count(*)::int AS n FROM security_events WHERE actor_id=$1 AND event_type='login_failure' AND created_at > now() - interval '10 minutes'",[user.id]);
+      if(r.rows[0].n === 5) await security(user.id,'suspicious_login','high','authentication','Repeated failed logins detected');
+    }
     return res.status(401).json({ error: 'Invalid credentials' });
   }
   const token = jwt.sign({ id:user.id, role:user.role, email:user.email, name:user.name }, secret(), { algorithm:'HS256', expiresIn:'2h' });
@@ -104,12 +123,15 @@ app.post('/api/events/:id/registrations', auth, asyncRoute(async (req,res) => {
       const type = await client.query('SELECT id FROM registration_types WHERE id=$1 AND event_id=$2',[typeId,event.id]);
       if (!type.rows.length) { await client.query('ROLLBACK'); return res.status(400).json({ error:'Invalid registration type' }); }
     }
+    const rules = await validateRegistrationRules(client,event.id,req.user.email,typeId,req.body?.answers||{});
+    if(rules.error) { await client.query('ROLLBACK'); return res.status(403).json({ error:rules.error }); }
     const { rows: existing } = await client.query('SELECT id,status FROM registrations WHERE event_id=$1 AND user_id=$2',[event.id,req.user.id]);
     if (existing.length) { await client.query('ROLLBACK'); return res.status(409).json({ error:'Already registered. Cancel existing registration before registering again.' }); }
     const { rows: count } = await client.query("SELECT count(*)::int AS n FROM registrations WHERE event_id=$1 AND status='confirmed'",[event.id]);
     const status = count[0].n >= event.capacity ? 'waitlisted' : 'confirmed';
     const { rows } = await client.query('INSERT INTO registrations(event_id,user_id,attendee_name,email,registration_type_id,status) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,event_id,status,created_at',
       [event.id,req.user.id,name.trim(),req.user.email,typeId,status]);
+    await persistRegistrationAnswers(client,rows[0].id,rules.answers);
     await client.query('INSERT INTO audit_logs(actor_id,action,object_type,object_id) VALUES($1,$2,$3,$4)',[req.user.id,'register','registration',rows[0].id]);
     await client.query('COMMIT');
     res.status(201).json({ registration:rows[0] });
@@ -221,6 +243,7 @@ app.patch('/api/incidents/:id', auth, allow(manage), asyncRoute(async (req,res) 
   await writeAudit(req.user.id,'update_status','incident',rows[0].id);
   res.json({ incident:rows[0] });
 }));
+installExtensions(app,{auth,allow,manage,staff,asyncRoute,query,pool,writeAudit,security,canReadRegistration});
 app.use((req,res) => res.status(404).json({ error:'Route not found' }));
 app.use((err,req,res,next) => {
   if (res.headersSent) return next(err);
