@@ -10,12 +10,12 @@ test('advanced registration setup: paths, questions, sessions, imports and previ
  await page.getByLabel('New registration type').fill(newPath);
  await page.getByRole('button',{name:'Create registration path'}).click();
  await expect(page.getByText('Path added')).toBeVisible();
- await page.getByLabel('Registration path',{exact:true}).selectOption({label:newPath});
+ await page.locator('select').nth(1).selectOption({label:newPath});
  await page.getByLabel('Allowed email domain, blank means unrestricted').fill('eventshield.test');
  await page.getByRole('button',{name:'Save eligibility rule'}).click();
  await expect(page.getByText('Domain restriction saved')).toBeVisible();
  await page.getByLabel('Question label').fill('Synthetic QA custom question');
- await page.getByLabel('Visible to').selectOption({label:newPath});
+ await page.locator('select').nth(2).selectOption({label:newPath});
  await page.getByLabel('Required answer').check();
  await page.getByRole('button',{name:'Add question'}).click();
  await expect(page.getByText('Question created')).toBeVisible();
