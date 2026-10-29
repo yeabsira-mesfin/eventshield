@@ -9,7 +9,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "test": "node --test tests/*.test.js",
-    "check": "node --check server.js && node --check db.js"
+    "check": "node --check server.js && node --check db.js && node --check extensions.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -17,7 +17,8 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "csv-parse": "^5.6.0"
   },
   "overrides": {
     "proxy-addr": "2.0.8"
