@@ -136,3 +136,5 @@ CREATE TABLE IF NOT EXISTS incident_events(
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  PRIMARY KEY(incident_id,security_event_id)
 );
+
+ALTER TABLE imported_attendees ADD COLUMN IF NOT EXISTS registration_id UUID REFERENCES registrations(id);
