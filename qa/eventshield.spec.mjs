@@ -12,6 +12,8 @@ test('desktop/mobile UI, registration and forbidden cross-user request',async({p
   await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();
   await expect(page.getByRole('button',{name:/Events/}).first()).toBeVisible();
   await page.screenshot({path:testInfo.outputPath('eventshield-mobile.png'),fullPage:true});
+  const horizontalOverflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
   await page.setViewportSize({width:1440,height:900});
   await page.getByRole('button',{name:/Events/}).first().click();
   await expect(page.getByRole('heading',{name:'Event management'})).toBeVisible();
