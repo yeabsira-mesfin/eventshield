@@ -39,6 +39,15 @@ test('protected event creation and cross-attendee access generate security alert
     const victimId=first.data.registration.id;
     assert.equal((await call('/registrations/'+victimId,attendee)).status,403);
     assert.equal((await call('/registrations/'+victimId,guest)).status,200);
+    const cancelled=await call('/registrations/'+victimId+'/cancel',guest,'PATCH');
+    assert.equal(cancelled.status,200);
+    assert.equal(cancelled.data.registration.status,'cancelled');
+    assert.equal(cancelled.data.promoted,true);
+    const promoted=await call('/registrations/'+second.data.registration.id,attendee);
+    assert.equal(promoted.status,200);
+    assert.equal(promoted.data.registration.status,'confirmed');
+    const cancelledAgain=await call('/registrations/'+victimId+'/cancel',guest,'PATCH');
+    assert.equal(cancelledAgain.status,409);
     const logged=await query("SELECT count(*)::int AS n FROM security_events WHERE event_type='object_access_denied'");
     assert.ok(logged.rows[0].n >= 1);
   } finally {
