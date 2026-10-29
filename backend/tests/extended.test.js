@@ -67,6 +67,13 @@ test('advanced event workflows enforce eligibility, questions, capacity and impo
   assert.equal(audience.data.staged.length,1);
   assert.equal(audience.data.suppressed,1);
   assert.equal(audience.data.registrations.length,2);
+  const stagedId=audience.data.staged[0].id;
+  const notMatched=await call('/events/'+id+'/imports/'+stagedId,admin,'PATCH',{action:'reconcile',registration_id:regId});
+  assert.equal(notMatched.status,409);
+  const excluded=await call('/events/'+id+'/imports/'+stagedId,admin,'PATCH',{action:'exclude'});
+  assert.equal(excluded.status,200);
+  assert.equal(excluded.data.imported_attendee.status,'excluded');
+
   assert.equal((await call('/events/'+id+'/audience',attendee)).status,403);
   const tmpl=await call('/events/'+id+'/templates',admin,'POST',{kind:'confirmation',subject:'{{event}} confirmed',body:'Hello {{name}}! {{status}}'});
   assert.equal(tmpl.status,200);
