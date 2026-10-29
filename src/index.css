@@ -28,3 +28,9 @@
 .topbar{color:#516175}
 .heading p,.panel p,.metric>div,.metric small,.event-row small{color:#4c5e70}
 .side-caption{color:#c0d4df}
+
+
+/* WCAG dashboard status and label contrast */
+.demo-tag{color:#175d46}
+.kicker{color:#0a6079}
+.badge-success{color:#126546}
