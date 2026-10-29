@@ -130,15 +130,59 @@ app.get('/api/registrations/:id', auth, asyncRoute(async (req,res) => {
   res.json({ registration:rows[0] });
 }));
 app.patch('/api/registrations/:id/cancel', auth, asyncRoute(async (req,res) => {
-  const { rows } = await query('SELECT * FROM registrations WHERE id=$1',[req.params.id]);
-  if (!rows[0]) return res.status(404).json({ error:'Registration not found' });
-  if (!canReadRegistration(req.user,rows[0])) {
-    await security(req.user.id,'object_access_denied','high','registration-api','Blocked cross-account cancellation');
-    return res.status(403).json({ error:'Access denied' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Read the event key first, then lock the event row in the same order
+    // used by registration transactions to serialize capacity changes.
+    const initial = await client.query('SELECT event_id,user_id FROM registrations WHERE id=$1',[req.params.id]);
+    if (!initial.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error:'Registration not found' });
+    }
+    if (!canReadRegistration(req.user,initial.rows[0])) {
+      await client.query('ROLLBACK');
+      await security(req.user.id,'object_access_denied','high','registration-api','Blocked cross-account cancellation');
+      return res.status(403).json({ error:'Access denied' });
+    }
+    await client.query('SELECT id FROM events WHERE id=$1 FOR UPDATE',[initial.rows[0].event_id]);
+    const current = await client.query('SELECT id,status,user_id FROM registrations WHERE id=$1 FOR UPDATE',[req.params.id]);
+    if (!current.rows[0] || current.rows[0].status === 'cancelled') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error:'Registration already cancelled' });
+    }
+    const priorStatus = current.rows[0].status;
+    const changed = await client.query("UPDATE registrations SET status='cancelled' WHERE id=$1 RETURNING id,status",[req.params.id]);
+    let promoted = null;
+    if (priorStatus === 'confirmed') {
+      const waiting = await client.query(
+        "SELECT id FROM registrations WHERE event_id=$1 AND status='waitlisted' ORDER BY created_at,id LIMIT 1 FOR UPDATE",
+        [initial.rows[0].event_id]
+      );
+      if (waiting.rows[0]) {
+        const result = await client.query(
+          "UPDATE registrations SET status='confirmed' WHERE id=$1 RETURNING id",
+          [waiting.rows[0].id]
+        );
+        promoted = result.rows[0].id;
+        await client.query(
+          'INSERT INTO audit_logs(actor_id,action,object_type,object_id) VALUES($1,$2,$3,$4)',
+          [req.user.id,'waitlist_promote','registration',promoted]
+        );
+      }
+    }
+    await client.query(
+      'INSERT INTO audit_logs(actor_id,action,object_type,object_id) VALUES($1,$2,$3,$4)',
+      [req.user.id,'cancel','registration',req.params.id]
+    );
+    await client.query('COMMIT');
+    res.json({ registration:changed.rows[0], promoted: !!promoted });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-  const changed = await query("UPDATE registrations SET status='cancelled' WHERE id=$1 RETURNING id,status",[req.params.id]);
-  await writeAudit(req.user.id,'cancel','registration',req.params.id);
-  res.json({ registration:changed.rows[0] });
 }));
 app.get('/api/events/:id/registrations', auth, allow(staff), asyncRoute(async (req,res) => {
   const { rows } = await query('SELECT id,attendee_name,email,status,created_at FROM registrations WHERE event_id=$1 ORDER BY created_at DESC LIMIT 500',[req.params.id]);
