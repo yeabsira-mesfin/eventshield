@@ -169,6 +169,27 @@ export function installExtensions(app,{auth,allow,manage,staff,asyncRoute,query,
    res.status(201).json({imported,duplicates,rejected:0,mode:'staged_for_reconciliation'});
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  }));
+ app.patch('/api/events/:id/imports/:importId',auth,allow(manage),asyncRoute(async(req,res)=>{
+  const {action,registration_id=null}=req.body||{};
+  if(!['reconcile','exclude'].includes(action))return reject(res,'Invalid reconciliation action');
+  const client=await pool.connect();
+  try{
+   await client.query('BEGIN');
+   const found=await client.query('SELECT * FROM imported_attendees WHERE id=$1 AND event_id=$2 FOR UPDATE',[req.params.importId,eventParam(req)]);
+   if(!found.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Staged attendee not found'});}
+   if(action==='reconcile'){
+    if(typeof registration_id!=='string'){await client.query('ROLLBACK');return reject(res,'Matching registration required');}
+    const match=await client.query('SELECT id FROM registrations WHERE id=$1 AND event_id=$2 AND lower(email)=$3 AND status<>$4',[registration_id,eventParam(req),found.rows[0].email,'cancelled']);
+    if(!match.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Registration email does not match staged record'});}
+   }
+   const result=await client.query('UPDATE imported_attendees SET status=$1,registration_id=$2 WHERE id=$3 RETURNING id,status,registration_id',
+    [action==='reconcile'?'reconciled':'excluded',action==='reconcile'?registration_id:null,req.params.importId]);
+   await client.query('INSERT INTO audit_logs(actor_id,action,object_type,object_id) VALUES($1,$2,$3,$4)',
+    [req.user.id,action==='reconcile'?'reconcile_attendee':'exclude_attendee','event',eventParam(req)]);
+   await client.query('COMMIT');
+   res.json({imported_attendee:result.rows[0]});
+  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+ }));
  app.get('/api/events/:id/audience',auth,allow(manage),asyncRoute(async(req,res)=>{
   const id=eventParam(req),status=['confirmed','waitlisted','cancelled'].includes(req.query.status)?req.query.status:null;
   const [groups,imports,suppressed,roster]=await Promise.all([
