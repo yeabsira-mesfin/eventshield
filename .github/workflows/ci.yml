@@ -42,3 +42,19 @@ jobs:
       - name: Dependency audit
         working-directory: backend
         run: npm audit --omit=dev --audit-level=high
+
+      - name: Install Chromium for browser QA
+        run: npx playwright install --with-deps chromium
+      - name: Run desktop/mobile browser QA
+        run: npm run test:e2e
+        env:
+          NODE_ENV: development
+      - name: Upload browser QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eventshield-browser-qa
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
