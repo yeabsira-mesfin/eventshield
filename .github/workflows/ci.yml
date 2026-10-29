@@ -1,0 +1,65 @@
+name: EventShield CI
+on:
+  push:
+    branches: ["feature/**"]
+  pull_request:
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: eventshield
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: eventshield
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eventshield" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://eventshield@localhost:5432/eventshield
+      NODE_ENV: test
+      TEST_INTEGRATION: '1'
+      JWT_SECRET: ${{ github.run_id }}-${{ github.sha }}
+      DEMO_PASSWORD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and build frontend
+        run: npm install --no-audit --no-fund && npm run build
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+      - name: Migrate and seed synthetic database
+        working-directory: backend
+        run: npm run migrate && npm run seed
+      - name: API syntax and policy/integration tests
+        working-directory: backend
+        run: npm run check && npm test
+      - name: Dependency audit
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install Chromium for browser QA
+        run: npx playwright install --with-deps chromium
+      - name: Run desktop/mobile browser QA
+        run: npm run test:e2e
+        env:
+          NODE_ENV: development
+      - name: Upload browser QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eventshield-browser-qa
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
+      - name: Validate local Docker Compose configuration
+        run: docker compose --env-file docker.env.example config --quiet
+      - name: Build local container images
+        run: docker compose --env-file docker.env.example build
