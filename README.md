@@ -10,10 +10,10 @@ This feature branch preserves the existing Git history and legacy application co
 - Password login with bcrypt hashing, JWT expiration, and login rate limiting
 - PostgreSQL persistence with SQL migrations and a deterministic synthetic seed
 - Admin, Event Manager, Staff and Attendee roles with server-enforced authorization
-- Event draft creation, publishing, archiving, registration types and registration
+- Event draft creation, editing, publishing, archiving, domain-restricted registration types, required/conditional questions, admission items, sessions and registration
 - Atomic capacity enforcement using PostgreSQL row locks, waitlists, cancellation, and automatic promotion of the oldest waitlisted attendee
 - Object-level access checks that reject an attendee reading or cancelling another attendee's record
-- Security monitoring for successful and failed logins, denied API access, and CSV exports
+- Security monitoring for successful/failed logins, repeated failures, API rate limits, blocked record reads and sensitive CSV exports
 - Audit logs, incident creation/resolution, CSV exports with formula-injection protection
 - Backend policy tests and PostgreSQL-backed API integration tests in GitHub Actions
 
@@ -80,8 +80,18 @@ Threats considered include brute-force login, broken function-level authorizatio
 
 ## Remaining development
 
-Custom questions and conditional visibility, registration paths beyond registration types, email templates and dispatch, attendee CSV import and deduplication, session enrollment, suppression segments, multitenancy, and deployment hardening are not implemented yet. Session tables are provisioned, but there is no booking UI.
+Custom questions, type-specific visibility, email-domain registration paths, session/admission enrollment, suppression, CSV staging, duplicate checks and text-only email previews are implemented. Live email delivery, multi-tenant isolation, complete invitation workflows, advanced question branching, and production deployment remain out of scope.
 
 ## Portfolio summary
 
 Designed an event technology MVP using React, Express, PostgreSQL, server-side RBAC, auditable registration workflows, safe attendee CSV export, and security alerts for blocked cross-account record access.
+
+## Extended event technology capabilities
+
+The event setup workspace includes registration paths restricted by email domain, required questions shown by registration type, admission and session inventory, audience segmentation, suppression fingerprints, CSV import staging with duplicate checks and audited exclusion/reconciliation, and confirmation/waitlist/cancellation email previews. Messages are never delivered to real addresses. Incident cases can be linked to security signals for timelines.
+
+## Reproducible Docker demo and QA
+
+Copy `docker.env.example` to `.env`, replace the placeholders with locally generated secrets, then run `docker compose up --build`. Visit http://127.0.0.1:8080. Docker is bound to the local loopback interface, and the Postgres database is not exposed on a host port.
+
+CI runs PostgreSQL-backed integration tests, Chromium user journeys on desktop and mobile, axe-core WCAG checks, dependency scans, Compose validation and image builds. See [QA.md](QA.md) for the exact regression process and limitations.
