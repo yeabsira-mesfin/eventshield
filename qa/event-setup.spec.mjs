@@ -37,5 +37,6 @@ test('advanced registration setup: paths, questions, sessions, imports and previ
  await page.getByRole('button',{name:'Preview message'}).click();
  await expect(page.getByText('Preview refreshed')).toBeVisible();
  await expect(page.locator('.preview').getByText(/your registration for/)).toBeVisible();
+ await page.evaluate(()=>window.scrollTo(0,0));
  await page.screenshot({path:testInfo.outputPath('eventshield-event-setup.png'),fullPage:true});
 });
