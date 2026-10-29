@@ -20,3 +20,11 @@
 .resource-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #edf1f5;padding:12px 0;font-size:.8rem}
 .resource-row small{display:block;margin-top:4px}
 @media(max-width:700px){.member-grid{grid-template-columns:1fr}}
+
+
+/* WCAG text contrast corrections */
+.login-card .kicker{color:#13667f}
+.login-card p,.login-card small{color:#455a6c}
+.topbar{color:#516175}
+.heading p,.panel p,.metric>div,.metric small,.event-row small{color:#4c5e70}
+.side-caption{color:#c0d4df}
