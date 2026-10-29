@@ -11,7 +11,7 @@ This feature branch preserves the existing Git history and legacy application co
 - PostgreSQL persistence with SQL migrations and a deterministic synthetic seed
 - Admin, Event Manager, Staff and Attendee roles with server-enforced authorization
 - Event draft creation, publishing, archiving, registration types and registration
-- Atomic capacity enforcement using PostgreSQL row locks, waitlists and cancellation
+- Atomic capacity enforcement using PostgreSQL row locks, waitlists, cancellation, and automatic promotion of the oldest waitlisted attendee
 - Object-level access checks that reject an attendee reading or cancelling another attendee's record
 - Security monitoring for successful and failed logins, denied API access, and CSV exports
 - Audit logs, incident creation/resolution, CSV exports with formula-injection protection
@@ -80,7 +80,7 @@ Threats considered include brute-force login, broken function-level authorizatio
 
 ## Remaining development
 
-Custom questions and conditional visibility, registration paths beyond registration types, email templates and dispatch, attendee CSV import and deduplication, session enrollment, cancellation-driven waitlist promotion, suppression segments, multitenancy, and deployment hardening are not implemented yet. Session tables are provisioned, but there is no booking UI.
+Custom questions and conditional visibility, registration paths beyond registration types, email templates and dispatch, attendee CSV import and deduplication, session enrollment, suppression segments, multitenancy, and deployment hardening are not implemented yet. Session tables are provisioned, but there is no booking UI.
 
 ## Portfolio summary
 
